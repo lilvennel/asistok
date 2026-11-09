@@ -1,0 +1,37 @@
+# Credenciales y configuracion privada
+.env*
+!.env.example
+
+# Datos privados y archivos de usuarios
+data/
+
+# Dependencias
+node_modules/
+
+# Bases de datos
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# Respaldos
+*.bak
+*.bak-*
+*.bak.*
+*.backup*
+*~
+
+# Logs
+*.log
+
+# Certificados y claves privadas
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Git
+.git/
+
+# Archivos del sistema
+.DS_Store

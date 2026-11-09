@@ -20,8 +20,8 @@ function issueVerification(user) {
   run('INSERT INTO email_verifications(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)', sec.sha(token), user.id, now + VERIFY_TTL_MS, now);
   const link = `${cfg.APP_URL}/?verify=${token}`;
   const to = fc.decryptEmail(user.email) || user.email;
-  sendMail(to, 'Confirmá tu email · Asist OK',
-    `<p>Hola ${esc(user.name)},</p><p>Para confirmar tu email entrá a este link (vale 24 horas):</p><p><a href="${link}">${link}</a></p><p>Si no creaste una cuenta en Asist OK, ignorá este mensaje.</p>`)
+  sendMail(to, 'Confirmá tu email · AsistOK',
+    require('../lib/mailer').wrapHtml('¡Bienvenido a AsistOK!', `<p>Hola <strong>${esc(user.name)}</strong>,</p><p>Gracias por registrarte. Para activar tu cuenta, confirmá tu dirección de correo electrónico.</p><p style="text-align:center;margin:28px 0"><a href="${link}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700">Confirmar mi correo</a></p><p>Este enlace es válido durante <strong>24 horas</strong>.</p><p style="font-size:13px;color:#64748b">Si el botón no funciona, copiá este enlace en tu navegador:</p><p style="font-size:12px;word-break:break-all"><a href="${link}" style="color:#0f766e">${link}</a></p><p>Si no creaste una cuenta en AsistOK, podés ignorar este mensaje.</p>`))
     .catch((e) => console.error('[mail]', e.message));
 }
 
@@ -50,6 +50,17 @@ route('GET', '/api/public/reviews', (ctx) => {
     logo_url: r.logo_path ? '/api/public/tenant-logo/' + r.tid : null,
   })) };
 });
+// Logo público del portal de cada negocio activo
+route('GET', '/api/public/portal-logo/:slug', (ctx) => {
+  const row = get('SELECT logo_path FROM tenants WHERE slug=? AND status=?', ctx.params.slug, 'active');
+  if (!row?.logo_path) throw notFound();
+  const file = path.join(cfg.DATA_DIR, 'uploads', row.logo_path);
+  if (!fs.existsSync(file)) throw notFound();
+  const ext = path.extname(file).toLowerCase();
+  const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  return { __file: { buf: fs.readFileSync(file), filename: 'logo' + ext, mime, inline: true, cache: 'public, max-age=300' } };
+});
+
 // logo público solo para reviews aprobadas (por tenant id folder)
 route('GET', '/api/public/tenant-logo/:tid', (ctx) => {
   const tid = String(ctx.params.tid || '').replace(/\D/g, '');
@@ -115,12 +126,15 @@ route('GET', '/api/public/legal', () => {
 });
 
 route('GET', '/api/public/tenant/:slug', (ctx) => {
-  const t = get('SELECT name, slug, status FROM tenants WHERE slug=?', ctx.params.slug);
+  const t = get('SELECT id, name, slug, status, logo_path FROM tenants WHERE slug=?', ctx.params.slug);
   if (!t || t.status !== 'active') throw notFound('Ese negocio no existe o no está activo');
-  return { name: t.name, slug: t.slug };
+  return { name: t.name, slug: t.slug, logo_url: t.logo_path ? '/api/public/portal-logo/' + t.slug : null };
 });
 
 route('POST', '/api/auth/register', async (ctx) => {
+  if (ctx.hostTenantSlug) {
+    throw new HttpError(403, 'TENANT_PORTAL_REGISTER_DISABLED', 'El registro de negocios se realiza desde asistok.app');
+  }
   rateLimit('reg:' + ctx.ip, 8, 3600e3);
   await verifyTurnstile(ctx.body.turnstile_token, ctx.ip);
   if (!ctx.body.accept_terms) throw bad('Tenés que aceptar los Términos y condiciones para registrarte');
@@ -160,6 +174,11 @@ route('POST', '/api/auth/login', async (ctx) => {
     failRecord(pairKey, LOGIN_PAIR); failRecord(ipKey, LOGIN_IP);
     throw new HttpError(401, 'BAD_CREDENTIALS', 'Email o contraseña incorrectos');
   }
+  if (ctx.hostTenant && (u.role === 'superadmin' || u.tenant_id !== ctx.hostTenant.id)) {
+    failRecord(pairKey, LOGIN_PAIR);
+    failRecord(ipKey, LOGIN_IP);
+    throw new HttpError(401, 'BAD_CREDENTIALS', 'Email o contraseña incorrectos');
+  }
   failClear(pairKey);
   if (u.status === 'pending') {
     let extra = '';
@@ -183,6 +202,9 @@ route('POST', '/api/auth/logout', (ctx) => {
 route('GET', '/api/auth/me', (ctx) => {
   const user = sec.userFromSession(ctx.cookies.sid);
   if (!user || user.status !== 'active') return { user: null };
+  if (ctx.hostTenantSlug && (!ctx.hostTenant || user.role === 'superadmin' || user.tenant_id !== ctx.hostTenant.id)) {
+    return { user: null };
+  }
   const tenant = user.tenant_id ? get('SELECT * FROM tenants WHERE id=?', user.tenant_id) : null;
   return {
     user: sec.publicUser(user),
@@ -220,7 +242,17 @@ route('POST', '/api/auth/password', { auth: 'user', anyStatus: true }, async (ct
 route('POST', '/api/auth/forgot', async (ctx) => {
   rateLimit('forgot:' + ctx.ip, 6, 3600e3);
   const email = clean(ctx.body.email).toLowerCase();
-  let u = emailOk(email) ? sec.findUserByEmail(email) : null; if (u && u.status !== 'active') u = null;
+  const validEmail = emailOk(email);
+  let u = validEmail ? sec.findUserByEmail(email) : null;
+  const foundUser = !!u;
+  if (u && u.status !== 'active') u = null;
+  console.log('[forgot-debug]', {
+    bodyObject: !!ctx.body && typeof ctx.body === 'object',
+    hasEmail: !!ctx.body.email,
+    validEmail,
+    foundUser,
+    activeUser: !!u
+  });
   if (u) {
     const token = sec.randomToken(32);
     run('DELETE FROM resets WHERE user_id=?', u.id);
@@ -228,7 +260,7 @@ route('POST', '/api/auth/forgot', async (ctx) => {
     const link = `${cfg.APP_URL}/?reset=${token}`;
     const to = fc.decryptEmail(u.email) || u.email;
     sendMail(to, 'Recuperá tu contraseña · AsistOK',
-      `<p>Hola ${esc(u.name)},</p><p>Para elegir una nueva contraseña entrá a este link (vale 1 hora):</p><p><a href="${link}">${link}</a></p><p>Si no lo pediste vos, ignorá este mensaje.</p>`);
+      require('../lib/mailer').wrapHtml('Recuperá tu contraseña', `<p>Hola <strong>${esc(u.name)}</strong>,</p><p>Recibimos una solicitud para cambiar la contraseña de tu cuenta.</p><p style="text-align:center;margin:28px 0"><a href="${link}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700">Crear nueva contraseña</a></p><p>Este enlace es válido durante <strong>1 hora</strong>.</p><p style="font-size:13px;color:#64748b">Si el botón no funciona, copiá este enlace en tu navegador:</p><p style="font-size:12px;word-break:break-all"><a href="${link}" style="color:#0f766e">${link}</a></p><p>Si no solicitaste este cambio, ignorá este mensaje. Tu contraseña actual seguirá siendo válida.</p>`));
   }
   return { ok: true }; // misma respuesta exista o no el email
 });

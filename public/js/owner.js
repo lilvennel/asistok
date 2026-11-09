@@ -440,6 +440,7 @@ async function tabEmpleados() {
   const t = S.me.tenant, pct = Math.min(100, (t.employee_count / t.employee_limit) * 100);
   const pend = employees.filter((e) => e.status === 'pending');
   const link = `${S.me.app_url}/alta/${t.slug}`;
+  const portalLink = `https://${t.slug}.asistok.app`;
   patchEl('#tab-body', html`<div class="card">
     <div class="row between"><div><strong>Empleados</strong><div class="muted">${t.employee_count} de ${t.employee_limit} activos</div></div>
       <div class="row mb" style="gap:6px;flex-wrap:wrap">
@@ -449,6 +450,11 @@ async function tabEmpleados() {
     </div>
     <button class="btn btn-primary btn-sm" data-act="emp-add" type="button">+ Agregar</button></div>
     <div class="emp-bar"><div class="emp-bar-fill" style="width:${pct}%"></div></div>
+    <div class="card" style="background:var(--bg)">
+      <strong>Acceso al portal de empleados</strong>
+      <p class="muted" style="word-break:break-all">${portalLink}</p>
+      <button class="btn btn-primary btn-sm" data-act="copy" data-text="${portalLink}" type="button">Copiar link del portal</button>
+    </div>
     <div class="row mb"><button class="btn btn-outline btn-sm" data-act="alta-qr" type="button">QR de alta</button>
       ${!isStaffOnly() ? html`<button class="btn btn-outline btn-sm" data-act="csv-open" type="button">Importar CSV</button>` : ''}
       <button class="btn btn-outline btn-sm" data-act="copy" data-text="${link}" type="button">Copiar link de registro</button></div>

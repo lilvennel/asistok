@@ -13,10 +13,12 @@ function pathEntryMode() {
 function pathTenantSlug() {
   const m = location.pathname.match(/^\/t\/([a-z0-9-]+)/i);
   if (m) return m[1].toLowerCase();
-  const host = location.hostname || '';
-  const parts = host.split('.');
-  // ferreteria.asistok.app → ferreteria (si no es www)
-  if (parts.length >= 3 && parts[0] !== 'www') return parts[0].toLowerCase();
+  const host = (location.hostname || '').toLowerCase();
+  const suffix = '.asistok.app';
+  if (host.endsWith(suffix)) {
+    const label = host.slice(0, -suffix.length);
+    if (label && !label.includes('.') && !['www', 'api'].includes(label)) return label;
+  }
   return null;
 }
 
@@ -77,7 +79,7 @@ function buildAuthPanel(message) {
   const reg = authTab === 'reg', forgot = authTab === 'forgot';
   const loginForm = forgot ? html`
     <form data-form="forgot"><p class="muted mb">Ingresá tu email y te enviamos un link para elegir una nueva contraseña.</p>
-      ${eyeless('f-email', 'Email', 'email', 'required autocomplete="email"')}
+      ${eyeless('email', 'Email', 'email', 'required autocomplete="email"')}
       <button class="btn btn-primary btn-block" type="submit">Enviar link</button>
       <p class="sa-link" style="text-align:center;margin-top:12px"><a href="#" data-act="auth-tab" data-tab="login">← Volver</a></p></form>`
   : reg ? html`
@@ -177,13 +179,15 @@ export async function showAuth(message, opts = {}) {
     try { S.cfg = await get('/api/public/config'); } catch {}
   }
   const c = S.cfg || {}, h = c.hero || {}, ct = c.contact || {};
+  const portalSlug = pathTenantSlug();
+  if (portalSlug && authTab === 'reg') authTab = 'login';
   const reg = authTab === 'reg', forgot = authTab === 'forgot';
   // Solo se muestra WhatsApp si el Super Admin cargó un link real (Inicio web → Contacto): no hay número de ejemplo.
   const waHref = ct.wa_link || '';
   const wa = waHref ? html`<a href="${waHref}" target="_blank" rel="noopener">${ct.wa_label || 'WhatsApp'}</a>` : '';
   const loginForm = forgot ? html`
     <form data-form="forgot"><p class="muted mb">Ingresá tu email y te enviamos un link para elegir una nueva contraseña.</p>
-      ${eyeless('f-email', 'Email', 'email', 'required autocomplete="email"')}
+      ${eyeless('email', 'Email', 'email', 'required autocomplete="email"')}
       <button class="btn btn-primary btn-block" type="submit">Enviar link</button>
       <p class="sa-link" style="text-align:center;margin-top:12px"><a href="#" data-act="auth-tab" data-tab="login">← Volver</a></p></form>`
   : reg ? html`
@@ -227,6 +231,39 @@ export async function showAuth(message, opts = {}) {
       ${turnstileSlot()}
       <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
     </form>`;
+
+  if (portalSlug) {
+    let portalTenant = null;
+    try {
+      portalTenant = await get('/api/public/tenant/' + encodeURIComponent(portalSlug));
+    } catch {}
+
+    if (!portalTenant) {
+      render(html`<div class="page-center"><div class="card form-card">
+        <h2 style="font-size:1.2rem">Portal no disponible</h2>
+        <p class="muted mt">Este negocio no existe o no está activo.</p>
+        <a class="btn btn-outline btn-block mt" href="https://asistok.app">Ir a AsistOK</a>
+      </div></div>`);
+      ensureCookieUI();
+      return;
+    }
+
+    render(html`<div class="page-center">
+      <div class="card form-card">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px">
+          ${portalTenant.logo_url ? html`<img src="${portalTenant.logo_url}" alt="Logo de ${portalTenant.name}" style="width:48px;height:48px;object-fit:contain;border-radius:8px">` : html`<div class="logo-mark" aria-hidden="true"></div>`}
+          <strong style="font-size:1.15rem;font-weight:800">${portalTenant.name}</strong>
+        </div>
+        <h2 style="font-size:1.2rem;text-align:center">Acceso al portal</h2>
+        <p class="muted mt" style="text-align:center">Ingresá con tu cuenta de ${portalTenant.name}.</p>
+        ${message ? html`<div class="alert alert-ok">${message}</div>` : ''}
+        ${loginForm}
+      </div>
+    </div>`);
+    ensureCookieUI();
+    if (typeof loadTurnstile === 'function') loadTurnstile();
+    return;
+  }
 
   render(html`
   <div class="ok-landing">
@@ -694,6 +731,13 @@ acts['go-home'] = async () => {
 // Cambio Iniciar sesión / Registrarse / Olvidé: sin scroll (ancla el panel)
 acts['auth-tab'] = async (el) => {
   const tab = el.dataset.tab || 'login';
+  if (pathTenantSlug()) {
+    if (tab === 'reg') return;
+    if (authTab === tab && document.querySelector('.form-card')) return;
+    authTab = tab;
+    await showAuth(undefined, { skipCfg: true });
+    return;
+  }
   if (authTab === tab && document.querySelector('.login-panel')) return;
   authTab = tab;
   const panel = document.querySelector('.ok-landing .login-panel');
@@ -1038,7 +1082,7 @@ function resetPage(token) {
     <form data-form="reset" data-token="${token}">${eyeless('password', 'Nueva contraseña (mínimo 8)', 'password', 'required minlength="8" autocomplete="new-password"')}
     <button class="btn btn-primary btn-block" type="submit">Guardar</button></form></div></div>`);
 }
-forms.reset = async (v, f) => { await post('/api/auth/reset', { token: f.dataset.token, password: v.password }); cleanUrl(); authTab = 'login'; await showAuth('Listo. Ya podés ingresar con tu nueva contraseña.'); };
+forms.reset = async (v, f) => { await post('/api/auth/reset', { token: f.dataset.token, password: v.password }); cleanUrl(); q.delete('reset'); authTab = 'login'; await showAuth('Listo. Ya podés ingresar con tu nueva contraseña.'); };
 
 // ---------- Sugerencias y reportes (dueño y empleado) ----------
 acts['feedback-open'] = (el) => openModal(html`<h3 style="margin-bottom:4px">Reportar un problema o enviar una idea</h3><p class="muted mb">Lo lee el equipo de AsistOK. No hace falta que sea perfecto.</p>

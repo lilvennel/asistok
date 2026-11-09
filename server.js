@@ -15,7 +15,7 @@ for (const f of ['auth', 'pay', 'owner', 'display', 'import', 'employee', 'feedb
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain; charset=utf-8' };
-const SPA_PATHS = /^\/(alta\/[^/]+|m\/[^/]+|pantalla\/[^/]+|terminos|privacidad|estado)\/?$/;
+const SPA_PATHS = /^\/(alta\/[^/]+|m\/[^/]+|pantalla\/[^/]+|terminos|privacidad|estado|admin|app|marcar|t\/[^/]+\/(admin|app|marcar))\/?$/;
 
 // Cloudflare Turnstile (captcha opcional) necesita cargar su script y su iframe: solo se habilita si está configurado.
 const TS = cfg.TURNSTILE_ENABLED ? ' https://challenges.cloudflare.com' : '';
@@ -83,6 +83,25 @@ function originOk(req) {
   return false;
 }
 
+function resolveTenantHost(req) {
+  const host = String(req.headers.host || '').toLowerCase().replace(/:\\d+$/, '');
+  const suffix = '.asistok.app';
+  if (!host.endsWith(suffix)) return { slug: null, tenant: null };
+
+  const label = host.slice(0, -suffix.length);
+  if (!label || label.includes('.') || ['www', 'api'].includes(label)) {
+    return { slug: null, tenant: null };
+  }
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(label)) {
+    return { slug: null, tenant: null };
+  }
+
+  return {
+    slug: label,
+    tenant: get('SELECT * FROM tenants WHERE slug=?', label)
+  };
+}
+
 async function handleApi(req, res, url) {
   const method = req.method === 'HEAD' ? 'GET' : req.method;
   let found = null, params = {};
@@ -95,6 +114,12 @@ async function handleApi(req, res, url) {
   const opts = found.opts;
   const setCookies = [];
   const ctx = { req, res, url, params, query: Object.fromEntries(url.searchParams), ip: clientIp(req), cookies: parseCookies(req.headers.cookie), body: {}, user: null, tenant: null, setCookie: (c) => setCookies.push(c) };
+  const hostTenant = resolveTenantHost(req);
+  ctx.hostTenantSlug = hostTenant.slug;
+  ctx.hostTenant = hostTenant.tenant;
+  if (ctx.hostTenantSlug && !ctx.hostTenant) {
+    throw new HttpError(404, 'TENANT_NOT_FOUND', 'Ese portal no existe');
+  }
 
   if (method !== 'GET' && !originOk(req)) throw new HttpError(403, 'BAD_ORIGIN', 'Origen no permitido');
 
@@ -102,6 +127,9 @@ async function handleApi(req, res, url) {
     const user = sec.userFromSession(ctx.cookies.sid);
     if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Tenés que iniciar sesión');
     if (user.status !== 'active') throw new HttpError(403, 'ACCOUNT_DISABLED', 'Tu cuenta no está habilitada');
+    if (ctx.hostTenant && (user.role === 'superadmin' || user.tenant_id !== ctx.hostTenant.id)) {
+      throw new HttpError(403, 'TENANT_MISMATCH', 'Esta cuenta no pertenece a este negocio');
+    }
     const allowed = opts.auth === 'user' ? null : (Array.isArray(opts.auth) ? opts.auth : [opts.auth]);
     if (allowed && !allowed.includes(user.role)) throw new HttpError(403, 'FORBIDDEN', 'No tenés permiso para esto');
     ctx.user = user;
