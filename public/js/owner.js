@@ -775,7 +775,7 @@ async function tabSucursales() {
         <li>Asignación de empleados a cada local</li>
         <li>Reportes filtrados por sucursal</li>
       </ul>
-      <p style="font-weight:700;font-size:1.1rem;margin-bottom:12px">${price != null ? money(price) + ' · pago único' : 'Consultá el precio en Config'}</p>
+      <p style="font-weight:700;font-size:1.1rem;margin-bottom:12px">${price != null ? money(price) + ' / mes' : 'Consultá el precio en Config'}</p>
       <button class="btn btn-mp btn-block" data-act="checkout" data-kind="mod_suc" type="button">Suscribir Multi-sucursal (mensual)</button>
     </div>`);
     return;
@@ -1168,7 +1168,7 @@ async function tabConfig() {
     <div class="form-group"><label for="c-sat_h">Horas de los sábados</label>${sel('sat_h', [[0, 'No trabaja'], [4, '4 horas'], [6, '6 horas'], [8, '8 horas']], s.sat_h)}</div></div>
   <button class="btn btn-primary btn-block mb" type="submit">Guardar configuración</button></form>
   <div class="card"><strong>🖼 Logo del negocio</strong>
-    <p class="muted mb">Se muestra en la barra del dueño y del empleado. Formatos: JPG, PNG o WebP. Máximo 2 MB. Recomendado: cuadrado 256×256 px o más.</p>
+    <p class="muted mb">Se muestra en el portal de empleados (ej. tunegocio.asistok.app), en la barra del dueño y del empleado. JPG, PNG o WebP · máx. 2 MB · ideal cuadrado 256×256.</p>
     <div class="row" style="align-items:center;gap:14px;margin-bottom:12px">
       ${S.me.tenant.logo_url
         ? html`<img class="brand-logo-preview" src="${S.me.tenant.logo_url}" alt="Logo">`
@@ -1183,10 +1183,10 @@ async function tabConfig() {
   <form data-form="settings-theme" class="card"><strong>🎨 Color de marca</strong><p class="muted mb">Color del panel (botones y acentos). No es modo oscuro.</p><div class="theme-presets" role="radiogroup">${SWATCHES.map((c) => html`<label data-act="theme-live" data-color="${c}"><input class="sr-only" type="radio" name="theme" value="${c}" ${c === s.theme ? raw('checked') : ''}><span class="theme-swatch ${c === s.theme ? 'active' : ''}" style="background:${c};display:block"></span></label>`)}</div></div>
   <button class="btn btn-primary btn-block mb" type="submit">Guardar configuración</button></form>
   <div class="card"><strong>Ampliar AsistOK</strong>
-    <p class="muted mb">Solo si lo necesitás. El fichaje y los reportes ya funcionan con tu plan.</p>
-    ${[['mod_suc', 'Multi-sucursal', 'Más de un local con QR y geocerca'], ['mod_rec', 'Recibos', 'Subir PDFs y pedir firma al empleado']].map(([k, name, desc]) => html`<div class="config-row"><div><div class="title">${name} ${t[k] ? html`<span class="module-status status-on">Activo</span>` : html`<span class="muted" style="font-size:.75rem">Opcional</span>`}</div><div class="desc">${desc}</div></div>
-      ${t[k] ? '' : html`<button class="btn btn-outline btn-sm" data-act="checkout" data-kind="${k}" type="button">${money(p[k])}</button>`}</div>`)}
-    <p class="muted" style="font-size:.78rem;margin-top:8px">Los módulos se cobran como suscripción mensual (se renuevan con Mercado Pago). Cupones y cambio de plan: al pagar o en Tu plan.</p>
+    <p class="muted mb">Módulos opcionales por <strong>suscripción mensual</strong>. El fichaje y los reportes ya funcionan con tu plan.</p>
+    ${[['mod_suc', 'Multi-sucursal', 'Más de un local con QR y geocerca · cobro mensual'], ['mod_rec', 'Recibos', 'Subir PDFs y pedir firma · cobro mensual']].map(([k, name, desc]) => html`<div class="config-row"><div><div class="title">${name} ${t[k] ? html`<span class="module-status status-on">Activo</span>` : html`<span class="muted" style="font-size:.75rem">Opcional · /mes</span>`}</div><div class="desc">${desc}</div></div>
+      ${t[k] ? html`<span class="muted" style="font-size:.8rem">Incluido / activo</span>` : html`<button class="btn btn-outline btn-sm" data-act="checkout" data-kind="${k}" type="button">${money(p[k])} / mes</button>`}</div>`)}
+    <p class="muted" style="font-size:.78rem;margin-top:8px"><strong>Suscripción mensual</strong> (Mercado Pago). Empleados extra en “Tu plan” son pago único. Cupones al pagar.</p>
   </div>
   <div class="card plan-card-pro"><strong>Tu plan</strong>
     <p class="muted mt">${({ esencial: 'Esencial', pro: 'Pro', completo: 'Completo' })[t.plan_tier || 'esencial'] || t.plan_tier} · ${t.plan === 'once' ? 'Pago único' : 'Suscripción mensual'} · ${t.paid_until ? 'hasta ' + new Date(t.paid_until).toLocaleDateString('es-AR') : 'sin vencimiento'} · ${t.employee_limit} empleados</p>

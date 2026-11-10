@@ -237,10 +237,13 @@ async function precios() {
         ${n('completo_y', 'Pago único', p.completo_y ?? 560000)}
       </div>
     </div>
-    <div style="font-weight:700;margin:16px 0 8px">Módulos y extras (pago único)</div>
+    <div style="font-weight:700;margin:16px 0 8px">Módulos (suscripción mensual)</div>
     <div class="grid2">
-      ${n('mod_suc', 'Multi-sucursal', p.mod_suc)}
-      ${n('mod_rec', 'Recibos de sueldo', p.mod_rec)}
+      ${n('mod_suc', 'Multi-sucursal / mes', p.mod_suc)}
+      ${n('mod_rec', 'Recibos de sueldo / mes', p.mod_rec)}
+    </div>
+    <div style="font-weight:700;margin:16px 0 8px">Extras (pago único)</div>
+    <div class="grid2">
       ${n('extra', 'Empleado extra (c/u)', p.extra)}
       <div class="form-group"><label for="free_employees">Empleados incluidos en el plan</label>
         <input id="free_employees" name="free_employees" type="number" min="1" max="10000" step="1" value="${d.free_employees}" required>
