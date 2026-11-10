@@ -133,7 +133,7 @@ route('POST', '/api/me/mark', E, (ctx) => {
         } catch (_) {}
         try {
           run("INSERT INTO notifs(tenant_id,type,user_id,text,detail,created_at) VALUES(?,?,?,?,?,?)",
-            ctx.tenant.id, 'auth', ctx.user.id,
+            ctx.tenant.id, 'device', ctx.user.id,
             (ctx.user.name || 'Empleado') + ' quiere usar otro celular',
             'Pendiente de aprobación del empleador. Podés autorizarlo en Empleados → Legajo / ficha.', Date.now());
           alerts.notifyOwner(ctx.tenant.id, {

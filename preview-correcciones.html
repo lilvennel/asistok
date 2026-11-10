@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AsistOK · Preview correcciones</title>
+<style>
+  :root { --theme:#0f766e; --bg:#f4f6f8; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e8ecf0; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,sans-serif; background:#0f172a; color:#e2e8f0; padding:24px 14px 48px; line-height:1.45; }
+  .wrap { max-width:960px; margin:0 auto; }
+  h1 { font-size:1.35rem; color:#fff; margin-bottom:6px; }
+  .lead { color:#94a3b8; margin-bottom:22px; max-width:60ch; font-size:.92rem; }
+  h2 { font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; color:#5eead4; margin:28px 0 12px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:720px){ .grid { grid-template-columns:1fr; } }
+  .phone {
+    background:var(--bg); color:var(--text); border-radius:20px; overflow:hidden;
+    border:3px solid #1e293b; box-shadow:0 16px 40px rgba(0,0,0,.35); min-height:420px;
+  }
+  .phone-h { background:#fff; border-bottom:1px solid var(--border); padding:10px 14px; font-size:.72rem; color:var(--muted); font-weight:600; display:flex; justify-content:space-between; }
+  .body { padding:16px; }
+  .portal-page { min-height:380px; background:linear-gradient(160deg,#ecfdf5,#f8fafc 50%,#f1f5f9); display:flex; align-items:center; justify-content:center; padding:20px 12px; }
+  .portal-card { width:100%; max-width:340px; background:#fff; border-radius:22px; padding:24px 20px; box-shadow:0 20px 50px rgba(15,23,42,.1); border:1px solid rgba(15,118,110,.1); }
+  .portal-brand { display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:14px; }
+  .logo { width:56px; height:56px; border-radius:14px; background:var(--theme); color:#fff; display:grid; place-items:center; font-weight:800; font-size:.85rem; box-shadow:0 4px 14px rgba(15,118,110,.25); }
+  .portal-name { font-size:1.15rem; font-weight:800; color:var(--text); }
+  .portal-title { text-align:center; font-size:1.05rem; font-weight:800; margin-bottom:4px; }
+  .muted { color:var(--muted); font-size:.85rem; text-align:center; margin-bottom:14px; }
+  .field { margin-bottom:10px; text-align:left; }
+  .field label { display:block; font-size:.75rem; font-weight:600; margin-bottom:4px; color:#334155; }
+  .field input { width:100%; border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:.9rem; }
+  .btn { display:block; width:100%; border:0; border-radius:12px; padding:12px; font-weight:700; background:var(--theme); color:#fff; margin-top:8px; text-align:center; }
+  .btn-mp { background:#009ee3; }
+  .btn-outline { background:#fff; color:var(--text); border:1px solid var(--border); }
+  .btn-sm { display:inline-block; width:auto; padding:8px 12px; font-size:.8rem; margin:4px 4px 0 0; }
+  .activate-badge { display:inline-block; font-size:.7rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#0f766e; background:#ccfbf1; padding:4px 10px; border-radius:999px; margin-bottom:10px; }
+  .activate-title { font-size:1.25rem; font-weight:800; margin-bottom:4px; }
+  .summary { background:#f8fafc; border:1px solid var(--border); border-radius:12px; padding:12px; margin:12px 0; font-size:.88rem; }
+  .summary-row { display:flex; justify-content:space-between; padding:4px 0; }
+  .summary-total { font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:8px; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #f1f5f9; font-size:.88rem; }
+  .row:last-child { border-bottom:0; }
+  .tag { font-size:.68rem; font-weight:700; color:#0f766e; background:#ecfdf5; padding:2px 8px; border-radius:999px; }
+  .note { background:#151d2e; border:1px solid #243044; border-radius:14px; padding:14px 16px; margin-top:22px; font-size:.85rem; color:#cbd5e1; }
+  .note strong { color:#fff; }
+  ul { margin:8px 0 0 18px; }
+  li { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Preview · Correcciones ya aplicadas</h1>
+  <p class="lead">Referencia visual de lo que ya quedó en el zip anterior. No es la app en vivo. Después de esto implementamos legajo, módulos como suscripción real, liquidación, subdominio y device-approve.</p>
+
+  <h2>1 · Portal del cliente (ej. mitre.asistok.app)</h2>
+  <div class="grid">
+    <div class="phone">
+      <div class="phone-h"><span>Antes</span><span>logo + nombre al lado</span></div>
+      <div class="body" style="background:#f4f6f8;min-height:360px;display:flex;align-items:center;justify-content:center">
+        <div style="background:#fff;border-radius:12px;padding:20px;width:100%;max-width:300px;border:1px solid #e8ecf0">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px">
+            <div class="logo" style="width:40px;height:40px;font-size:.7rem">M</div>
+            <strong>mitre</strong>
+          </div>
+          <h3 style="text-align:center;font-size:1rem">Acceso al portal</h3>
+          <p class="muted">Fondo plano · marca en línea</p>
+        </div>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-h"><span>Ahora</span><span>portal pro</span></div>
+      <div class="portal-page">
+        <div class="portal-card">
+          <div class="portal-brand">
+            <div class="logo">mitre</div>
+            <div class="portal-name">mitre</div>
+          </div>
+          <h2 class="portal-title" style="color:var(--text);text-transform:none;letter-spacing:0;font-size:1.05rem">Acceso al portal</h2>
+          <p class="muted">Ingresá con tu cuenta de empleado o gestión.</p>
+          <div class="field"><label>Email</label><input placeholder="empleado@mail.com"></div>
+          <div class="field"><label>Contraseña</label><input type="password" placeholder="••••••••"></div>
+          <div class="btn">Ingresar</div>
+          <p class="muted" style="margin-top:12px;font-size:.72rem">Powered by AsistOK</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>2 · Activá tu cuenta</h2>
+  <div class="phone" style="max-width:400px">
+    <div class="phone-h"><span>Checkout previo al pago</span><span>más claro</span></div>
+    <div class="body" style="background:linear-gradient(165deg,#f0fdfa,#f8fafc)">
+      <div class="card" style="box-shadow:0 12px 40px rgba(15,23,42,.08);border-radius:18px">
+        <span class="activate-badge">AsistOK</span>
+        <div class="activate-title">Activá tu cuenta</div>
+        <p class="muted" style="text-align:left">tati / tu negocio</p>
+        <div class="summary">
+          <div class="summary-row"><span>Suscripción mensual</span><span>$ 39.999</span></div>
+          <div class="summary-row summary-total"><span>Total (primer mes)</span><strong>$ 39.999</strong></div>
+        </div>
+        <p class="muted" style="text-align:left;font-size:.8rem;margin-bottom:10px">🎁 1 mes de prueba en Esencial · MP no cobra hasta que termine</p>
+        <div class="btn btn-mp">Probar 1 mes gratis con Mercado Pago</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>3 · Ampliar AsistOK + plan</h2>
+  <div class="phone" style="max-width:420px">
+    <div class="phone-h"><span>Config · plan</span></div>
+    <div class="body">
+      <div class="card">
+        <strong>Ampliar AsistOK</strong>
+        <p class="muted" style="text-align:left;margin:8px 0">Módulos como <strong>suscripción mensual</strong> (texto actualizado).</p>
+        <div class="row"><div><div>Multi-sucursal <span class="tag">Opcional</span></div><div class="muted" style="text-align:left">Más de un local</div></div><strong>$ 2.499</strong></div>
+        <div class="row"><div><div>Recibos <span class="tag">Opcional</span></div><div class="muted" style="text-align:left">PDF + firma</div></div><strong>$ 2.499</strong></div>
+      </div>
+      <div class="card">
+        <strong>Tu plan</strong>
+        <p class="muted" style="text-align:left">Pro · Suscripción mensual</p>
+        <span class="btn btn-sm btn-outline">Pasar a plan de por vida</span>
+        <span class="btn btn-sm">Pasar a Completo</span>
+      </div>
+      <div class="card">
+        <strong>Pagos pending</strong>
+        <p class="muted" style="text-align:left">Si quedan “Pendiente” más de 7 días, el job los marca <strong>cancelled</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>4 · Horas extra</h2>
+  <div class="note">
+    <strong>Reglas aplicadas</strong>
+    <ul>
+      <li>Si “Permitir hora extra” está off → no hay botón en el empleado.</li>
+      <li>Si está on → hay que elegir 50% y/o 100%.</li>
+      <li>Feriados como 100% solo en feriados del sistema.</li>
+    </ul>
+  </div>
+
+  <div class="note" style="margin-top:12px">
+    <strong>WhatsApp avisos del cliente</strong><br>
+    En el panel del dueño, si configurás un número/enlace de WhatsApp (config o Super Admin), los atajos “avisar” abren <code>wa.me</code> con un texto armado (certificado, permiso, link QR). No envía solo: el dueño confirma el envío en WhatsApp. Si no hay número, no hay aviso por WA.
+  </div>
+</div>
+</body>
+</html>

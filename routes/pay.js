@@ -12,12 +12,12 @@ const billing = require('../lib/billing');
 const TITLES = {
   plan_sub: 'Asist OK · Suscripción mensual', plan_once: 'Asist OK · Licencia pago único',
   plan_upgrade: 'Asist OK · Cambio de plan (diferencia)',
-  extra: 'Asist OK · Empleados extra (pago único)', mod_suc: 'Asist OK · Módulo Multi-sucursal', mod_rec: 'Asist OK · Módulo Recibos de sueldo',
+  extra: 'Asist OK · Empleados extra (pago único)', mod_suc: 'Asist OK · Multi-sucursal (suscripción)', mod_rec: 'Asist OK · Recibos (suscripción)',
 };
 
 route('POST', '/api/pay/checkout', { auth: 'owner', anyStatus: true }, async (ctx) => {
   const t = ctx.tenant, kind = ctx.body.kind;
-  if (!['plan', 'plan_upgrade', 'extra', 'mod_suc', 'mod_rec'].includes(kind)) throw bad('Producto inválido');
+  if (!['plan', 'plan_upgrade', 'extra', 'mod_suc', 'mod_rec', 'plan_once_from_sub'].includes(kind)) throw bad('Producto inválido');
   if (t.status === 'suspended') throw forbidden('Tu cuenta está suspendida. Contactá a soporte.', 'TENANT_SUSPENDED');
   if (kind === 'plan' && t.status === 'active') throw bad('Tu plan ya está activo');
   if (kind !== 'plan' && t.status !== 'active') throw new HttpError(402, 'PAYMENT_REQUIRED', 'Primero tenés que activar tu plan');
@@ -33,26 +33,30 @@ route('POST', '/api/pay/checkout', { auth: 'owner', anyStatus: true }, async (ct
     tier = String(ctx.body.tier || '');
     if (!['pro', 'completo'].includes(tier) || (tier === 'pro' && (t.plan_tier || 'esencial') !== 'esencial') || (t.plan_tier || 'esencial') === 'completo') throw bad('Ese cambio de plan no es válido');
   }
+  if (kind === 'plan_once_from_sub') {
+    if (t.plan !== 'sub' || t.status !== 'active') throw bad('Solo podés pasar a por vida si tenés suscripción activa');
+  }
   const { amount } = dom.chargeFor(t, kind, qty, { tier });
   // ctx.user viene de la base: el email está cifrado ('enc:…'); Mercado Pago necesita el email real
   const payerEmail = fc.decryptEmail(ctx.user.email) || ctx.user.email;
   const extRef = `ap-${t.id}-${kind}-${randomToken(8)}`;
-  const title = kind === 'plan' ? TITLES['plan_' + t.plan] : TITLES[kind];
+  const title = kind === 'plan' ? TITLES['plan_' + t.plan] : (kind === 'plan_once_from_sub' ? TITLES.plan_once : TITLES[kind]);
   run('INSERT INTO payments(tenant_id,kind,qty,amount,status,ext_ref,meta,created_at) VALUES(?,?,?,?,?,?,?,?)', t.id, kind, qty, amount, 'pending', extRef, tier ? JSON.stringify({ tier }) : null, Date.now());
 
   // Solo Mercado Pago por ahora. Arquitectura lista para sumar otro proveedor después.
   if (!mp.enabled()) return { url: `${cfg.APP_URL}/?demo_pay=${extRef}`, demo: true, amount, provider: 'mercadopago' };
   try {
-    if (kind === 'plan' && t.plan === 'sub') {
-      // Trial MP solo en plan Esencial (Pro/Completo pagan desde el día 1)
-      const trialDays = (t.plan_tier || 'esencial') === 'esencial' ? cfg.TRIAL_DAYS : 0;
+    // Suscripción recurrente: plan mensual o módulos Multi-sucursal / Recibos
+    if ((kind === 'plan' && t.plan === 'sub') || kind === 'mod_suc' || kind === 'mod_rec') {
+      const trialDays = (kind === 'plan' && (t.plan_tier || 'esencial') === 'esencial') ? (cfg.TRIAL_DAYS || 0) : 0;
       const pa = await mp.createPreapproval({ reason: title, amount, extRef, email: payerEmail, trialDays });
       run('UPDATE payments SET mp_pref_id=? WHERE ext_ref=?', pa.id, extRef);
-      return { url: pa.init_point, amount };
+      return { url: pa.init_point, amount, mode: 'subscription' };
     }
+    // Pago único: licencia, upgrade diferencia, extras, pasar a por vida
     const pref = await mp.createPreference({ title: qty > 1 ? `${title} x${qty}` : title, amount, extRef, email: payerEmail });
     run('UPDATE payments SET mp_pref_id=? WHERE ext_ref=?', pref.id, extRef);
-    return { url: pref.init_point, amount };
+    return { url: pref.init_point, amount, mode: 'once' };
   } catch (e) {
     console.error('[mp] checkout error', { status: e.status || 0, message: String(e.message || 'error').slice(0, 240), code: e.data?.error || '' });
     throw new HttpError(502, 'MP_ERROR', 'No pudimos iniciar el pago con Mercado Pago. Probá de nuevo en unos minutos.');

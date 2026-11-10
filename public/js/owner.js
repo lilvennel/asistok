@@ -2,6 +2,7 @@ import { S, acts, forms, html, raw, $, get, post, patch, api, render, patchEl, t
 import { qrSvg } from './qr.js';
 import { startCheckout } from './app.js';
 
+const MARK_KIND_ES = { in: 'Entrada', out: 'Salida', xin: 'Entrada extra', xout: 'Salida extra', extra: 'Hora extra' };
 const O = { tab: 'inicio', showNews: false, period: null, qrBranch: null, qrTimer: null, emps: [], branches: [], billingEnabled: false, _billingChecked: false, _metaLoaded: false, legajoTab: 'datos', legajoId: null, legajoPeriod: null , empFilter: 'all'};
 const TABS_OWNER = [['inicio', 'Inicio'], ['notif', 'Notif.'], ['solicitudes', 'Solicitudes'], ['empleados', 'Empleados'], ['qr', 'Local'], ['sucursales', 'Sucursales'], ['liquidacion', 'Liquidación'], ['extras', 'Horas extra'], ['reportes', 'Reportes'], ['facturas', 'Facturas'], ['config', 'Config']];
 // Internos: marcan. Externos (*_ext): mismo panel operativo sin pestaña Marcar (sueldo aparte / no por horas).
@@ -300,6 +301,7 @@ async function tabNotif() {
     <div class="grow"><div class="notif-title">${x.type === 'cert' ? html`<span class="notif-cert-tag">Certificado</span> ` : ''}${x.text}${!resolved && !x.read_at ? html` <span class="pending-badge" style="font-size:.6rem">nuevo</span>` : ''}</div><div class="notif-sub">${x.detail || ''} · ${fmtDateTime(x.created_at)}</div>
     ${resolved ? '' : html`<div class="row mt">${x.type === 'permit' ? html`<button class="btn btn-primary btn-sm" data-act="permit-decide" data-id="${x.ref_id}" data-ok="1" type="button">Aprobar</button><button class="btn btn-outline btn-sm" data-act="permit-decide" data-id="${x.ref_id}" data-ok="0" type="button">Rechazar</button>`
       : x.type === 'emp_request' ? html`<button class="btn btn-primary btn-sm" data-act="go-tab" data-tab="solicitudes" type="button">Ver solicitud</button><button class="btn btn-outline btn-sm" data-act="notif-seen" data-id="${x.id}" type="button">Marcar leída</button>`
+      : (x.type === 'device' || x.type === 'device_pending' || (x.type === 'auth' && x.user_id && /celular|dispositivo/i.test((x.text||'')+' '+(x.detail||'')))) ? html`${x.user_id ? html`<button class="btn btn-primary btn-sm" data-act="emp-device-approve" data-id="${x.user_id}" type="button">Aprobar celular</button><button class="btn btn-outline btn-sm" data-act="emp-device-reject" data-id="${x.user_id}" type="button">Rechazar</button>` : ''}<button class="btn btn-outline btn-sm" data-act="notif-seen" data-id="${x.id}" type="button">Marcar leída</button>`
       : x.type === 'cert' ? html`${x.user_id ? html`<button class="btn btn-primary btn-sm" data-act="emp-detail" data-id="${x.user_id}" type="button">Ver ficha</button>` : ''}<button class="btn btn-outline btn-sm" data-act="notif-seen" data-id="${x.id}" type="button">Marcar leída</button>`
       : x.type === 'auth' ? html`<button class="btn btn-primary btn-sm" data-act="emp-approve" data-id="${x.ref_id}" type="button">Autorizar</button><button class="btn btn-outline btn-sm" data-act="emp-reject" data-id="${x.ref_id}" type="button">Rechazar</button>`
       : html`${(x.type === 'no_exit' || x.type === 'geo_out') && x.user_id ? html`<button class="btn btn-outline btn-sm" data-act="mm-open" data-id="${x.user_id}" type="button">Corregir marca</button>` : ''}<button class="btn btn-primary btn-sm" data-act="notif-seen" data-id="${x.id}" type="button">Marcar como resuelto</button>`}</div>`}</div><button class="btn btn-outline btn-sm" style="align-self:flex-start" data-act="notif-del" data-id="${x.id}" type="button" aria-label="Borrar esta notificación" title="Borrar">🗑</button></div>`;
@@ -538,101 +540,8 @@ forms['emp-new'] = async (v) => {
 };
 acts['buy-extra'] = () => startCheckout('extra', Number($('#xq').value) || 1);
 
-acts['emp-detail'] = async (el) => {
-  const id = Number(el.dataset.id);
-  if (!O.emps.length) { O.emps = (await get('/api/owner/employees')).employees; O.branches = (await get('/api/owner/branches')).branches; }
-  const e = O.emps.find((x) => x.id === id); if (!e) return;
-  const { docs } = await get(`/api/owner/employees/${id}/docs`);
-  const t = S.me.tenant;
-  openModal(html`<div class="emp-ficha">
-  <div class="emp-ficha-head">
-    <div class="emp-ficha-av">${initials(e.name)}</div>
-    <div class="grow">
-      <div class="emp-ficha-name">${e.name}</div>
-      <div class="emp-ficha-sub">${e.cargo || 'Sin cargo'}${e.email ? ' · ' + e.email : ''}</div>
-    </div>
-    <span class="pill ${e.status === 'active' ? 'pill-g' : ''}">${e.status === 'active' ? 'Activo' : e.status || ''}</span>
-    <button class="btn btn-outline btn-sm" data-act="close-modal" type="button" aria-label="Cerrar">✕</button>
-  </div>
-  <div class="legajo-grid mb">
-    <div class="legajo-cell"><span class="legajo-l">Ingreso</span><strong>${e.hire_date || '—'}</strong></div>
-    <div class="legajo-cell"><span class="legajo-l">Horario</span><strong>${e.shift_start || e.shift_end ? ((e.shift_start || '—') + ' – ' + (e.shift_end || '—')) : '—'}</strong></div>
-    <div class="legajo-cell"><span class="legajo-l">Valor hora</span><strong>${e.wage_hourly != null && e.wage_hourly !== '' ? '$ ' + Number(e.wage_hourly).toLocaleString('es-AR') : 'Sin cargar'}</strong></div>
-    <div class="legajo-cell"><span class="legajo-l">Sucursal</span><strong>${(O.branches.find((b) => b.id === e.branch_id) || {}).name || '—'}</strong></div>
-    <div class="legajo-cell"><span class="legajo-l">Vacaciones</span><strong>${e.vacation ? (e.vacation.available + ' disp. · ' + e.vacation.used + ' usados') : '—'}</strong></div>
-    <div class="legajo-cell"><span class="legajo-l">Dispositivo</span><strong>${e.device_id ? 'Vinculado' : 'Sin vincular'}</strong></div>
-  </div>
-  <p class="muted" style="font-size:.78rem;margin:-4px 0 12px">Legajo digital · datos del empleado en un solo lugar. El valor hora alimenta la estimación de cobro del empleado (no es recibo legal).</p>
+acts['emp-detail'] = async (el) => { O.legajoTab = 'datos'; acts['emp-legajo'](el); };
 
-  <form data-form="emp-save" data-id="${id}">${empForm(e)}
-    <div class="grid2"><div class="form-group"><label for="ef-tel">Teléfono</label><input id="ef-tel" name="phone" value="${e.phone || ''}"></div><div class="form-group"><label for="ef-bd">Cumpleaños</label><input id="ef-bd" name="birthday" type="date" value="${e.birthday || ''}"></div></div>
-    <div class="form-group"><label for="ef-dir">Domicilio</label><input id="ef-dir" name="address" value="${e.address || ''}" placeholder="Calle, número y localidad"></div>
-    <div style="font-weight:700;font-size:.85rem;margin:12px 0 6px">Contacto de emergencia</div>
-    <div class="grid2"><div class="form-group"><label for="ef-emg">Nombre</label><input id="ef-emg" name="emg_name" value="${e.emg_name || ''}"></div>
-      <div class="form-group"><label for="ef-emg-rel">Relación</label><input id="ef-emg-rel" name="emg_rel" value="${e.emg_rel || ''}"></div></div>
-    <div class="form-group"><label for="ef-emg-ph">Teléfono emergencia</label><input id="ef-emg-ph" name="emg_phone" value="${e.emg_phone || ''}"></div>
-    <button class="btn btn-primary btn-block" type="submit">Guardar</button></form>
-  <div class="row mt"><button class="btn btn-primary btn-sm" data-act="mm-open" data-id="${id}" type="button">🕘 Marcas / corregir</button><button class="btn btn-outline btn-sm" data-act="emp-reset" data-id="${id}" type="button">Restablecer contraseña</button>
-    ${e.status === 'active' ? html`<button class="btn btn-danger btn-sm" data-act="emp-disable" data-id="${id}" type="button">Deshabilitar</button>` : html`<button class="btn btn-primary btn-sm" data-act="emp-enable" data-id="${id}" type="button">Habilitar</button>
-    <button class="btn btn-danger btn-sm" data-act="emp-delete" data-id="${id}" type="button">Eliminar</button>`}
-    ${S.me.user.role === 'owner' && e.status === 'active' ? html`
-    <div class="card" style="margin-top:10px;padding:12px">
-      <strong style="font-size:.9rem">Rol en el sistema</strong>
-      <p class="muted" style="font-size:.8rem;margin:4px 0 8px">Ahora: <strong>${roleLabel(e.role || 'employee')}</strong> · marca asistencia</p>
-      <p class="muted" style="font-size:.75rem;margin:0 0 6px"><strong>Con marcación</strong> (personal del local / por horas)</p>
-      <div class="row" style="flex-wrap:wrap;gap:6px">
-        <button class="btn ${e.role === 'employee' || !e.role ? 'btn-primary' : 'btn-outline'} btn-sm" data-act="emp-role" data-id="${id}" data-role="employee" type="button">Empleado</button>
-        <button class="btn ${e.role === 'manager' ? 'btn-primary' : 'btn-outline'} btn-sm" data-act="emp-role" data-id="${id}" data-role="manager" type="button">Encargado</button>
-        <button class="btn ${e.role === 'hr' ? 'btn-primary' : 'btn-outline'} btn-sm" data-act="emp-role" data-id="${id}" data-role="hr" type="button">RRHH</button>
-        <button class="btn ${e.role === 'accountant' ? 'btn-primary' : 'btn-outline'} btn-sm" data-act="emp-role" data-id="${id}" data-role="accountant" type="button">Contador</button>
-      </div>
-<p class="muted" style="font-size:.75rem;margin-top:8px">Encargado = solo su sucursal. RRHH = ve todo el negocio (sin pagos ni config).</p>
-    </div>` : ''}</div>
-  <div style="font-weight:700;font-size:.85rem;margin:14px 0 6px">Datos personales (Ley 25.326)</div>
-  <p class="muted" style="font-size:.82rem;margin-bottom:8px">Exportá el paquete completo del empleado (para entregárselo o responder a la AAIP) o eliminá todos sus datos personales a pedido del titular.</p>
-  <div class="row"><a class="btn btn-outline btn-sm" href="/api/owner/employees/${id}/export">📥 Exportar datos</a>
-    ${!isStaffOnly() ? html`<button class="btn btn-danger btn-sm" data-act="emp-erase" data-id="${id}" data-name="${e.name}" type="button">🗑️ Eliminar todos los datos</button>` : ''}</div>
-  <div style="font-weight:700;font-size:.85rem;margin:14px 0 6px">Documentos</div>
-  ${docs.length ? docs.map((d) => html`<div class="cert-item"><span>📄</span><div class="grow"><div style="font-weight:600">${d.title}${d.period ? ' · ' + d.period : ''}</div><div class="muted">${fmtDateTime(d.created_at)}${d.sign_status ? ' · ' + d.sign_status : ''}${d.sign_note ? ' · “' + d.sign_note + '”' : ''}</div></div>
-    <button type="button" class="btn btn-outline btn-sm" data-act="view-doc" data-id="${d.id}" data-name="${d.filename || d.title || 'documento'}">Ver</button></div>`) : html`<p class="muted">Sin documentos.</p>`}
-  ${t.mod_rec ? html`<form data-form="recibo-up" data-id="${id}" class="mt"><div class="grid2"><div class="form-group"><label for="rp">Período</label><input id="rp" name="period" type="month" required></div><div class="form-group"><label for="rf">PDF del recibo</label><input id="rf" name="file" type="file" accept="application/pdf" required></div></div><button class="btn btn-outline btn-block" type="submit">Subir recibo</button></form>`
-    : html`<p class="muted mt">Para subir recibos, activá el módulo en Config → Ampliar AsistOK.</p>`}`);
-};
-forms['emp-save'] = async (v, f) => {
-  const body = { ...v, branch_id: v.branch_id ? Number(v.branch_id) : null };
-  if (body.wage_hourly === '' || body.wage_hourly == null) body.wage_hourly = null;
-  else body.wage_hourly = Number(body.wage_hourly);
-  if (body.wage_monthly === '' || body.wage_monthly == null) body.wage_monthly = null;
-  else body.wage_monthly = Number(body.wage_monthly);
-  if (body.vacation_extra === '' || body.vacation_extra == null) body.vacation_extra = 0;
-  else body.vacation_extra = Number(body.vacation_extra);
-  await patch(`/api/owner/employees/${f.dataset.id}`, body);
-  closeModal(); toast('Ficha actualizada'); loadTab();
-};
-forms['recibo-up'] = async (v, f) => {
-  const file = f.querySelector('input[type=file]').files[0];
-  await post(`/api/owner/employees/${f.dataset.id}/recibos`, { period: v.period, filename: file.name, data: await fileToBase64(file) });
-  toast('Recibo cargado · el empleado ya puede verlo y firmar'); closeModal();
-};
-// ---------- Corregir / cargar marcas ----------
-const MM = { id: null, date: null };
-const KIND_LBL = { in: 'Entrada', out: 'Salida', xin: 'Entrada extra', xout: 'Salida extra' }, SRC_LBL = { qr: 'QR', panel: 'Panel', manual: 'Manual', auto: 'Cierre automático' };
-const nowHHMM = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' });
-async function mmView() {
-  const d = await get(`/api/owner/marks?user_id=${MM.id}&date=${MM.date}`);
-  const t = MM.date === todayAR() ? nowHHMM() : '08:00';
-  openModal(html`<div class="row between mb"><h3>Marcas de ${d.employee}</h3><button class="btn btn-outline btn-sm" data-act="close-modal" type="button" aria-label="Cerrar">✕</button></div>
-    <div class="form-group"><label for="mm-date">Día</label><input id="mm-date" type="date" value="${MM.date}" max="${todayAR()}" data-change="mm-date"></div>
-    ${d.marks.length ? d.marks.map((m) => html`<div class="hours-emp-row" style="display:block"><div class="row between"><div><strong>${KIND_LBL[m.kind]} · ${fmtTime(m.ts)}</strong> <span class="src-badge">${SRC_LBL[m.source] || m.source}</span>
-      <div class="muted">${[m.branch, m.dist != null ? `a ${m.dist} m` : '', m.note, m.created_by ? 'cargó ' + m.created_by : ''].filter(Boolean).join(' · ')}</div></div>
-      ${m.source === 'manual' ? html`<button class="btn btn-danger btn-sm" data-act="mm-del" data-id="${m.id}" type="button">Borrar</button>` : ''}</div></div>`) : html`<p class="muted">Sin marcas ese día.</p>`}
-    <div style="font-weight:700;font-size:.9rem;margin:16px 0 4px">Cargar una marca</div><p class="muted mb">Para cuando el GPS no anduvo o se olvidó de marcar. Queda registrada como carga manual y cuenta en las horas.</p>
-    <form data-form="mm-new"><div class="form-group"><label for="mm-action">Qué cargar</label><select id="mm-action" name="action" data-change="mm-action"><option value="in">Entrada</option><option value="out">Salida</option><option value="extra">Entrada extra</option></select></div>
-      <div class="form-group"><label for="mm-ts">Fecha y hora (Argentina)</label><input id="mm-ts" name="ts" type="datetime-local" value="${MM.date}T${t}" max="${todayAR()}T23:59" required></div>
-      <div class="form-group" id="mm-out-wrap"><label for="mm-out">Hora de salida (opcional: carga la jornada completa)</label><input id="mm-out" name="out_ts" type="datetime-local" max="${todayAR()}T23:59"></div>
-      <div class="form-group"><label for="mm-note">Motivo / nota</label><input id="mm-note" name="note" maxlength="200" placeholder="Ej.: el GPS no anduvo"></div>
-      <div id="mm-conflict"></div><button class="btn btn-primary btn-block" type="submit">Cargar marca</button></form>`);
-}
 acts['mm-open'] = async (el) => { MM.id = Number(el.dataset.id); MM.date = todayAR(); await mmView(); };
 acts['mm-date'] = (el) => { if (el.value) { MM.date = el.value; mmView(); } };
 acts['mm-action'] = (el) => $('#mm-out-wrap').classList.toggle('hidden', el.value === 'out');
@@ -867,7 +776,7 @@ async function tabSucursales() {
         <li>Reportes filtrados por sucursal</li>
       </ul>
       <p style="font-weight:700;font-size:1.1rem;margin-bottom:12px">${price != null ? money(price) + ' · pago único' : 'Consultá el precio en Config'}</p>
-      <button class="btn btn-mp btn-block" data-act="checkout" data-kind="mod_suc" type="button">Activar Multi-sucursal con Mercado Pago</button>
+      <button class="btn btn-mp btn-block" data-act="checkout" data-kind="mod_suc" type="button">Suscribir Multi-sucursal (mensual)</button>
     </div>`);
     return;
   }
@@ -958,7 +867,7 @@ async function tabExtras() {
         </label>
         <label class="ui-check-row">
           <input type="checkbox" name="holiday_as_100" value="1" ${s.holiday_as_100 === true || s.holiday_as_100 === 1 ? raw('checked') : ''}>
-          <span><strong>Feriados como 100%</strong><br><span class="muted" style="font-size:.8rem">Horas trabajadas en feriados del sistema van a la barra de 100%.</span></span>
+          <span><strong>Feriados como 100% (solo días feriado)</strong><br><span class="muted" style="font-size:.8rem">Solo aplica en feriados cargados del sistema; se suman como hora al 100% (no en días normales).</span></span>
         </label>
         <button class="btn btn-primary mt" type="submit">Guardar horas extra</button>
       </form>
@@ -985,11 +894,15 @@ forms['extras-save'] = async (v, f) => {
     const el = f?.querySelector?.('[name="' + name + '"]');
     return el ? !!el.checked : (v[name] === true || v[name] === 'on' || v[name] === '1');
   };
+  const allow = box('allow_extra');
+  const e50 = box('extra_50');
+  const e100 = box('extra_100');
+  if (allow && !e50 && !e100) throw Object.assign(new Error('Si permitís horas extra, elegí al menos 50% o 100%.'), { status: 400 });
   await patch('/api/owner/settings/extras', {
-    allow_extra: box('allow_extra') ? 1 : 0,
-    extra_50: box('extra_50') ? 1 : 0,
-    extra_100: box('extra_100') ? 1 : 0,
-    holiday_as_100: box('holiday_as_100') ? 1 : 0,
+    allow_extra: allow ? 1 : 0,
+    extra_50: allow && e50 ? 1 : 0,
+    extra_100: allow && e100 ? 1 : 0,
+    holiday_as_100: allow && box('holiday_as_100') ? 1 : 0,
   });
   await refreshMe();
   toast('Horas extra actualizadas');
@@ -1273,7 +1186,7 @@ async function tabConfig() {
     <p class="muted mb">Solo si lo necesitás. El fichaje y los reportes ya funcionan con tu plan.</p>
     ${[['mod_suc', 'Multi-sucursal', 'Más de un local con QR y geocerca'], ['mod_rec', 'Recibos', 'Subir PDFs y pedir firma al empleado']].map(([k, name, desc]) => html`<div class="config-row"><div><div class="title">${name} ${t[k] ? html`<span class="module-status status-on">Activo</span>` : html`<span class="muted" style="font-size:.75rem">Opcional</span>`}</div><div class="desc">${desc}</div></div>
       ${t[k] ? '' : html`<button class="btn btn-outline btn-sm" data-act="checkout" data-kind="${k}" type="button">${money(p[k])}</button>`}</div>`)}
-    <p class="muted" style="font-size:.78rem;margin-top:8px">Cupones y cambio de plan se gestionan al pagar o en la sección de plan más abajo.</p>
+    <p class="muted" style="font-size:.78rem;margin-top:8px">Los módulos se cobran como suscripción mensual (se renuevan con Mercado Pago). Cupones y cambio de plan: al pagar o en Tu plan.</p>
   </div>
   <div class="card plan-card-pro"><strong>Tu plan</strong>
     <p class="muted mt">${({ esencial: 'Esencial', pro: 'Pro', completo: 'Completo' })[t.plan_tier || 'esencial'] || t.plan_tier} · ${t.plan === 'once' ? 'Pago único' : 'Suscripción mensual'} · ${t.paid_until ? 'hasta ' + new Date(t.paid_until).toLocaleDateString('es-AR') : 'sin vencimiento'} · ${t.employee_limit} empleados</p>
@@ -1550,7 +1463,7 @@ async function tabMiMarcar() {
       ${on && allowExtra && !st.extra ? html`<button class="btn btn-outline" data-act="staff-mark" data-action="extra" type="button">Pasar a extra</button>` : ''}
     </div>
     ${st.today?.length ? html`<div class="mt"><strong style="font-size:.85rem">Hoy</strong>
-      <ul class="muted" style="margin:8px 0 0 18px;line-height:1.6">${st.today.map((m) => html`<li>${m.kind === 'in' ? 'Entrada' : m.kind === 'out' ? 'Salida' : m.kind === 'xin' ? 'Extra in' : m.kind === 'extra' || m.kind === 'xout' ? 'Extra out' : m.kind} · ${new Date(m.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}${m.auto ? ' (auto)' : ''}</li>`)}</ul>
+      <ul class="muted" style="margin:8px 0 0 18px;line-height:1.6">${st.today.map((m) => html`<li>${MARK_KIND_ES[m.kind] || m.kind} · ${new Date(m.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}${m.auto ? ' (auto)' : ''}</li>`)}</ul>
     </div>` : ''}
   </div>`);
 }
@@ -1818,7 +1731,7 @@ acts['emp-legajo'] = async (el) => {
       : html`<p class="muted mt">Sin ausencias registradas.</p>`}
     <strong style="font-size:.9rem;display:block;margin-top:14px">Últimas marcas</strong>
     ${(data.recent_marks || []).length
-      ? html`<div class="mt">${data.recent_marks.map((m) => html`<div class="hours-emp-row"><span>${fmtTs(m.ts)}</span><span>${m.kind}${m.auto ? ' · auto' : ''}${m.source === 'manual' ? ' · manual' : ''}</span></div>`)}</div>`
+      ? html`<div class="mt">${data.recent_marks.map((m) => html`<div class="hours-emp-row"><span>${fmtTs(m.ts)}</span><span>${MARK_KIND_ES[m.kind] || m.kind}${m.auto ? ' · auto' : ''}${m.source === 'manual' ? ' · manual' : ''}</span></div>`)}</div>`
       : html`<p class="muted mt">Sin marcas en este período.</p>`}`;
 
   const panelDocs = html`

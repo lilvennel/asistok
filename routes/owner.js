@@ -773,10 +773,17 @@ route('PATCH', '/api/owner/settings/extras', A_OWNER, (ctx) => {
   const b = ctx.body || {};
   const on = (x) => x === true || x === 1 || x === '1' || x === 'on';
   // Siempre exigir los 4 campos (el front los manda explícitos 0/1)
-  const allow_extra = on(b.allow_extra) ? 1 : 0;
-  const extra_50 = on(b.extra_50) ? 1 : 0;
-  const extra_100 = on(b.extra_100) ? 1 : 0;
-  const holiday_as_100 = on(b.holiday_as_100) ? 1 : 0;
+  let allow_extra = on(b.allow_extra) ? 1 : 0;
+  let extra_50 = on(b.extra_50) ? 1 : 0;
+  let extra_100 = on(b.extra_100) ? 1 : 0;
+  let holiday_as_100 = on(b.holiday_as_100) ? 1 : 0;
+  if (allow_extra && !extra_50 && !extra_100) {
+    const { bad } = require('../lib/http');
+    throw bad('Si permitís horas extra, elegí al menos 50% o 100%.');
+  }
+  if (!allow_extra) { extra_50 = 0; extra_100 = 0; holiday_as_100 = 0; }
+  // Feriados 100% solo tiene sentido con extras habilitadas
+  if (!allow_extra) holiday_as_100 = 0;
   run('UPDATE tenants SET allow_extra=?, extra_50=?, extra_100=?, holiday_as_100=? WHERE id=?',
     allow_extra, extra_50, extra_100, holiday_as_100, ctx.tenant.id);
   return { ok: true, allow_extra: !!allow_extra, extra_50: !!extra_50, extra_100: !!extra_100, holiday_as_100: !!holiday_as_100 };

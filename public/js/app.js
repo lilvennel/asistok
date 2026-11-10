@@ -25,7 +25,12 @@ function pathTenantSlug() {
 import { renderDisplay } from './display.js';
 
 const q = new URLSearchParams(location.search);
-let cleanUrl = () => history.replaceState(null, '', '/');
+let cleanUrl = () => {
+  const p = location.pathname || '/';
+  // No bajar de /admin o /app en subdominio del cliente (evita saltar al host raíz mal)
+  const keep = (p === '/admin' || p.startsWith('/admin/') || p === '/app' || p.startsWith('/app/') || p.startsWith('/t/')) ? p.split('?')[0] : (pathTenantSlug() ? p : '/');
+  history.replaceState(null, '', keep);
+};
 
 // ---------- Eventos globales (delegación; sin handlers inline por la CSP) ----------
 document.addEventListener('click', async (e) => {
@@ -248,16 +253,19 @@ export async function showAuth(message, opts = {}) {
       return;
     }
 
-    render(html`<div class="page-center">
-      <div class="card form-card">
-        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px">
-          ${portalTenant.logo_url ? html`<img src="${portalTenant.logo_url}" alt="Logo de ${portalTenant.name}" style="width:48px;height:48px;object-fit:contain;border-radius:8px">` : html`<div class="logo-mark" aria-hidden="true"></div>`}
-          <strong style="font-size:1.15rem;font-weight:800">${portalTenant.name}</strong>
+    render(html`<div class="portal-page">
+      <div class="portal-card">
+        <div class="portal-brand-pro">
+          ${portalTenant.logo_url
+            ? html`<img src="${portalTenant.logo_url}" alt="Logo de ${portalTenant.name}">`
+            : html`<div class="logo-mark" aria-hidden="true" style="width:56px;height:56px;border-radius:14px"></div>`}
+          <div class="portal-name">${portalTenant.name}</div>
         </div>
-        <h2 style="font-size:1.2rem;text-align:center">Acceso al portal</h2>
-        <p class="muted mt" style="text-align:center">Ingresá con tu cuenta de ${portalTenant.name}.</p>
+        <h2 class="portal-title">Acceso al portal</h2>
+        <p class="muted" style="text-align:center;margin:0 0 16px;font-size:.9rem">Ingresá con tu cuenta de empleado o gestión.</p>
         ${message ? html`<div class="alert alert-ok">${message}</div>` : ''}
         ${loginForm}
+        <p class="muted" style="text-align:center;margin-top:16px;font-size:.75rem">Powered by AsistOK</p>
       </div>
     </div>`);
     ensureCookieUI();
@@ -273,8 +281,8 @@ export async function showAuth(message, opts = {}) {
         <a class="logo" href="#" data-act="go-home"><div class="logo-mark" aria-hidden="true"></div><span class="logo-text" style="font-weight:800">AsistOK</span></a>
         <nav class="nav-links">
           <a href="#producto">Producto</a>
-          <a href="#soporte">Soporte</a>
-          <a href="#pricing">Precios</a>
+          <a href="#soporte" data-act="go-section" data-sec="soporte">Soporte</a>
+          <a href="#pricing" data-act="go-section" data-sec="pricing">Precios</a>
           <a href="#login" data-act="scroll-login">Ingresar</a>
         </nav>
         <div class="nav-actions">
@@ -590,9 +598,9 @@ export async function showAuth(message, opts = {}) {
         <div class="ok-foot-cols">
           <div class="ok-foot-col">
             <div class="ok-foot-h">Producto</div>
-            <a href="#producto">Características</a>
-            <a href="#precios">Precios</a>
-            <a href="#soporte">Soporte</a>
+            <a href="#producto" data-act="go-section" data-sec="producto">Características</a>
+            <a href="#pricing" data-act="go-section" data-sec="pricing">Precios</a>
+            <a href="#soporte" data-act="go-section" data-sec="soporte">Soporte</a>
           </div>
           <div class="ok-foot-col">
             <div class="ok-foot-h">Legal</div>
@@ -721,6 +729,12 @@ function startDemoAdminRotate() {
 acts['demo-admin'] = (el) => setDemoAdmin(el.dataset.k || 'asis', true);
 
 
+acts['go-section'] = (el) => {
+  const id = el.dataset.sec || (el.getAttribute('href') || '').replace('#','');
+  const node = id && document.getElementById(id);
+  if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  else if (el.getAttribute('href')) location.hash = el.getAttribute('href');
+};
 acts['go-home'] = async () => {
   authTab = 'login';
   if (!document.querySelector('.ok-landing')) {
@@ -893,9 +907,10 @@ function paymentScreen(statusMsg) {
   const pct = tenant.discount_months > 0 || tenant.plan === 'once' ? tenant.discount_pct : 0;
   const total = Math.round(base * (1 - pct / 100));
   const demo = S.cfg.payments.demo;
-  render(html`<div class="page-center"><div class="form-card card">
-    <h2 style="font-size:1.1rem;margin-bottom:4px">Activá tu cuenta</h2>
-    <p class="muted mb">${tenant.name}</p>
+  render(html`<div class="page-center activate-wrap"><div class="form-card card activate-card">
+    <div class="activate-badge">AsistOK</div>
+    <h2 class="activate-title">Activá tu cuenta</h2>
+    <p class="muted activate-sub">${tenant.name}</p>
     ${statusMsg ? html`<div class="alert alert-warn">${statusMsg}</div>` : ''}
     ${S.cfg.email_verification && !S.me.user.email_verified ? html`<div class="alert alert-warn">Antes de pagar tenés que confirmar tu email: te enviamos un link a ${S.me.user.email}. <button class="link" type="button" data-act="resend-verify">Reenviar email</button></div>` : ''}
     ${tenant.status === 'past_due' ? html`<div class="alert alert-warn">Tu suscripción no está al día. Regularizá el pago para volver a usar el panel.</div>` : ''}

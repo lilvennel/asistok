@@ -354,7 +354,7 @@ async function marcar() {
     </div>
 
     ${st.today?.length ? html`<div class="card"><strong>Marcas de hoy</strong>
-      ${st.today.map((m) => html`<div class="row between" style="padding:4px 0"><span>${({ in: 'Entrada', out: 'Salida', xin: 'Extra in', xout: 'Extra out', extra: 'Extra' })[m.kind] || m.kind}</span><span class="muted">${fmtTime(m.ts)}${m.auto ? ' · auto' : ''}</span></div>`)}
+      ${st.today.map((m) => html`<div class="row between" style="padding:4px 0"><span>${({ in: 'Entrada', out: 'Salida', xin: 'Entrada extra', xout: 'Salida extra', extra: 'Hora extra' })[m.kind] || m.kind}</span><span class="muted">${fmtTime(m.ts)}${m.auto ? ' · auto' : ''}</span></div>`)}
     </div>` : ''}
   `);
 }

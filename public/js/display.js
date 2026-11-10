@@ -87,5 +87,5 @@ export async function renderDisplay(token) {
   await refresh();
   D.timer = setInterval(tick, 1000);
 }
-acts['k-full'] = () => document.documentElement.requestFullscreen?.();
+acts['k-full'] = () => (document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.());
 acts['k-retry'] = async () => { D.qrDue = 0; if (D.gps !== 'ok') await startGps(); D.busy = false; await refresh(); };
